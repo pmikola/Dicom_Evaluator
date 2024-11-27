@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import matplotlib
 import cv2 as cv
+import torch
 from skimage.feature import match_template, peak_local_max
 from skimage.transform import rescale, resize, downscale_local_mean
 from matplotlib import pyplot as plt
@@ -15,10 +16,13 @@ from PIL import Image, ImageEnhance
 import scipy.signal
 import zipfile
 from brisque import BRISQUE
+import torch.hub as h
+from torchvision.transforms import transforms
+
 # import MTM
 # from MTM import matchTemplates
 matplotlib.use('TkAgg')
-
+device = torch.device("cuda") if torch.cuda.is_available() else "cpu"
 base = 'C:\PRACA\Depi\Prg_prj\Dicom_Evaluator\Dicom_Evaluator\CALIBRATION_IMG\\'
 folder_1 = 'fotki_do_kalibracjI\\'
 folder_2 = 'testy_do_kalibracji_obrazek_testowy\\'
@@ -97,10 +101,30 @@ def read_dcm(ph,f,channel='col',disp=0):
 # Note: Brisque method
 # Attention: This score should be from 0 to 100 where 0 is best perceived image
 brisque = BRISQUE(url=False)
-imgs = read_dcm(ph2, f2[25],channel='col',disp=1)
-for img in imgs:
-    print(brisque.score(img= img))
+imgs = read_dcm(ph1, f1[10],channel='col',disp=1)
+# Note: Brisque method
 
+# Note: ARNIQA method
+# print(torch.__version__)
+model = h.load(repo_or_dir="miccunifi/ARNIQA", source="github", model="ARNIQA",
+                       regressor_dataset="kadid10k")
+preprocess = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+# print(model)
+# Note: ARNIQA method
+model.eval().to(device)
+for img in imgs:
+    # print(brisque.score(img= img))
+    im1 = preprocess(img).float().to(device)
+    im1 = im1.unsqueeze(0)
+    im2 = preprocess(img).float().to(device)
+    im2 = im2.unsqueeze(0)
+    # img_ds = transforms.Resize((im.shape[1] // 2, im.shape[0] // 2))(im).float()
+    #with torch.no_grad(), torch.cuda.amp.autocast():
+    ARNIQA_score = model(im1,im2, return_embedding=False, scale_score=True)
+    print("ARNIQA score: ",ARNIQA_score)
 
 end = time.time()
 print("Evaluation time: ", end - start)
