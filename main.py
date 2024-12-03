@@ -22,6 +22,7 @@ import zipfile
 from brisque import BRISQUE
 import torch.hub as h
 from torchvision.transforms import transforms
+from torcheval.metrics import PeakSignalNoiseRatio
 
 # import MTM
 # from MTM import matchTemplates
@@ -206,7 +207,20 @@ def grad_difference_metric(img, impre1, impre2, n_regions=20):
 # Note: Gradient similarity metric
 
 # Note: PSNR metric
+psnr_metric = PeakSignalNoiseRatio(data_range=255.)
 
+def psnr_score(img,impre1,impre2):
+    img_score = torch.tensor(brisque.score(img=img)).unsqueeze(0)
+    impre1 = torchvision.transforms.functional.to_pil_image(noise_addition(impre1))
+    impre2 = torchvision.transforms.functional.to_pil_image(impre2)
+    psnr_metric.update(img_score,impre1)
+    psnr_score_p1 = psnr_metric.compute()
+    psnr_metric.update(img_score, impre2)
+    psnr_score_p2 = psnr_metric.compute()
+    imgp1_score = psnr_score_p1.unsqueeze(0)
+    imgp2_score = psnr_score_p2.unsqueeze(0)
+    psnr_score = 1 / torch.var(torch.cat([imgp1_score, imgp2_score], dim=0))
+    return psnr_score
 # Note: PSNR metric
 
 
@@ -226,7 +240,7 @@ with torch.no_grad():
         im1 = preprocess(img).float().to(device)
         im2 = preprocess(img).float().to(device)
 
-        psnr_score = torcheval.metrics.PeakSignalNoiseRatio(torch.from_numpy(img).float().to(device))
+        psnr_score = psnr_score(img, im1, im2)
         psnr_scores.append(psnr_score)
         print("PSNR Score          : ", psnr_score)
 
